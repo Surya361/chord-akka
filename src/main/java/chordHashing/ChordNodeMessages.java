@@ -32,6 +32,15 @@ public interface ChordNodeMessages {
         }
     }
 
+    final class Updatefingertable implements Serializable {
+         final long id;
+         final long pred;
+         public Updatefingertable(long id, long pred){
+             this.id = id;
+             this.pred = pred;
+         }
+    }
+
     final class GetPredecessor implements Serializable {
         final long id;
         public GetPredecessor(long id) {
@@ -58,11 +67,12 @@ public interface ChordNodeMessages {
     final class Stabilize implements Serializable {}
 
     final class StabilizeResp implements Serializable{
-         final long predecessorid;
+         final long predecessorid, id;
          final  ActorRef predActorref;
-         public StabilizeResp(long predecessorid, ActorRef predActorref){
+         public StabilizeResp(long predecessorid, ActorRef predActorref, long id){
              this.predecessorid = predecessorid;
              this.predActorref = predActorref;
+             this.id = id;
          }
     }
 

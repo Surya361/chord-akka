@@ -34,9 +34,9 @@ public class ChordNodeActorMain {
         }
         ActorRef nodeActorref;
         if (args[2].equals("true") ) {
-             nodeActorref = system.actorOf(ChordNodeActor.props(Math.abs(id), 32, true, args[1] ), "node");
+             nodeActorref = system.actorOf(NodeActorManager.props(Math.abs(id), args[1], 32,true ), "nodeManager");
         } else {
-            nodeActorref = system.actorOf(ChordNodeActor.props(Math.abs(id), 32, false, args[1] ), "node");
+            nodeActorref = system.actorOf(NodeActorManager.props(Math.abs(id), args[1], 32,false ), "nodeManager");
         }
 
 
@@ -46,7 +46,7 @@ public class ChordNodeActorMain {
 
         system.scheduler()
                 .schedule(
-                        Duration.ZERO, Duration.ofMillis(5000), nodeActorref, new ChordNodeMessages.Remainder(), system.dispatcher(), null);
+                        Duration.ZERO, Duration.ofMillis(10000), nodeActorref, new ChordNodeMessages.Remainder(), system.dispatcher(), null);
 
         /*try{
             Thread.sleep(10000);
