@@ -28,6 +28,11 @@ public interface ChordMessages {
             this.Keyid = keyid;
             this.Nodeid = Nodeid;
         }
+        public String toJson(){
+            return "{" +
+                    "Requestid: " + this.Keyid.toString()  +
+                    "}";
+        }
     }
 
     /** Message Object class to notify
@@ -59,10 +64,40 @@ public interface ChordMessages {
         }
     }
 
-    /**
+    /** Sends a Remainder to do a periodic synchronization
      *
      */
     final class Remainder implements Serializable{}
 
+    /** Acknowldeges the Notify
+     *
+     */
+    final class NotifyAck implements Serializable{}
+
+
+    /**
+     * Requests nodeinfo
+     */
+    final class NodeInfo implements Serializable{}
+
+
+    final class NodeInfoResp implements Serializable{
+        final Node current;
+        final Node successor;
+        final Node predecessor;
+        public NodeInfoResp(Node current, Node successor, Node predecessor){
+            this.current = current;
+            this.predecessor = predecessor;
+            this.successor = successor;
+        }
+
+        public String toJson(){
+            return "{" +
+                    "current: " + current.toJson()+ ", "+
+                    "successor: " + successor.toJson()+", "+
+                    "predecessor: " + predecessor.toJson() +", "+
+                    "}";
+        }
+    }
 
 }

@@ -20,12 +20,12 @@ public class ChordInitActor extends AbstractActor {
         this.currentNode = currentNode;
         this.bitlen = bitlen;
         this.nodeActor = null;
-
         if (clusterInit){
             this.seedNode = null;
             log.info("cluster init");
             //if clusterInit the currentNode is its successor
-           this.nodeActor = context().actorOf(ChordActor.props(this.currentNode, currentNode.id, bitlen),"node");
+           this.nodeActor = context().actorOf(ChordActor.props(this.currentNode, bitlen, currentNode),"node");
+           RestApiServer.startServer(context().system(), this.nodeActor, currentNode.ip, Integer.parseInt(currentNode.port)+10000);
         } else{
             this.seedNode = new Node(seedIp, seedPort);
             init();
@@ -42,7 +42,11 @@ public class ChordInitActor extends AbstractActor {
     }
 
     private void nodejoin(ChordMessages.SuccessorResp successorResp){
-        this.nodeActor = context().actorOf(ChordActor.props(successorResp.Nodeid, currentNode.id, bitlen),"node");
+        if (this.nodeActor == null) {
+            log.info("Successor: "+ successorResp.Nodeid.toJson());
+            this.nodeActor = context().actorOf(ChordActor.props(successorResp.Nodeid, bitlen, currentNode),"node");
+            RestApiServer.startServer(context().system(), this.nodeActor, currentNode.ip, Integer.parseInt(currentNode.port)+10000);
+        }
     }
 
     @Override

@@ -1,6 +1,7 @@
 package chordHashing;
 import akka.actor.ActorRef;
 import akka.actor.ActorSystem;
+import akka.http.javadsl.server.AllDirectives;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 import org.apache.commons.cli.*;
@@ -8,7 +9,7 @@ import org.apache.commons.cli.*;
 import java.time.Duration;
 
 
-public class ChordMain {
+public class ChordMain extends AllDirectives {
 
      static CommandLine parseFlags(String[] args){
         Options options = new Options();
@@ -43,8 +44,6 @@ public class ChordMain {
     }
 
 
-
-
     public static void main(String[] args) {
         CommandLine cmd = parseFlags(args);
         Node currNode = new Node(cmd.getOptionValue("ip" ), cmd.getOptionValue("l"));
@@ -58,7 +57,7 @@ public class ChordMain {
         if (cmd.getOptionValue("sip") == null){
             nodeActorref = system.actorOf(ChordInitActor.props("","",true, currNode,160), "nodeManager");
         } else {
-            nodeActorref = system.actorOf(ChordInitActor.props(cmd.getOptionValue("sip"),cmd.getOptionValue("sp"),true, currNode,160), "nodeManager");
+            nodeActorref = system.actorOf(ChordInitActor.props(cmd.getOptionValue("sip"),cmd.getOptionValue("sp"),false, currNode,160), "nodeManager");
         }
         system.scheduler()
                 .schedule(

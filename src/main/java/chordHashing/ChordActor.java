@@ -15,11 +15,11 @@ import java.util.HashMap;
  */
 public class ChordActor extends AbstractActor {
 
-    private final BigInteger id;
-    private BigInteger Predecessor;
+    private BigInteger Predecessor = null;
     private HashMap<BigInteger, Node> idNodeMap =new HashMap<>();
     private HashMap<BigInteger, ActorSelection> idActorRefMap = new HashMap<>();
     private FingerEntry[] fingerTable;
+    private final Node currentNode;
 
 
     private final LoggingAdapter log = Logging.getLogger(getContext().system(), this);
@@ -51,33 +51,34 @@ public class ChordActor extends AbstractActor {
         idNodeMap.put(node.id, node);
     }
 
-    private ChordActor(Node successor, BigInteger id, int bitlen){
-        this.id = id;
+    private ChordActor(Node successor, int bitlen, Node currentNode){
+        this.currentNode = currentNode;
         fingerTable = new FingerEntry[bitlen];
-        fingerTable[0] = getFingertableEntry(this.id, 0, successor.id, bitlen);
+        fingerTable[0] = getFingertableEntry(this.currentNode.id, 0, successor.id, bitlen);
         updateNodeCache(successor);
+        updateNodeCache(currentNode);
     }
 
-    public static Props props(Node Sucessor, BigInteger id, int bitlen){
-        return Props.create(ChordActor.class, () -> new ChordActor(Sucessor, id, bitlen));
+    public static Props props(Node Sucessor, int bitlen, Node currentNode){
+        return Props.create(ChordActor.class, () -> new ChordActor(Sucessor, bitlen, currentNode));
     }
 
 
-    private boolean greaterthan(BigInteger a, BigInteger b, boolean equal){
+    private static boolean greaterthan(BigInteger a, BigInteger b, boolean equal){
         if (a.compareTo(b) == 1 || (equal && a.compareTo(b) == 0)) {
             return true;
         }
         return false;
     }
 
-    private boolean lessthan(BigInteger a, BigInteger b, boolean equal){
+    private static boolean lessthan(BigInteger a, BigInteger b, boolean equal){
         if (a.compareTo(b) == -1 || (equal && a.compareTo(b) == 0)) {
             return true;
         }
         return false;
     }
 
-    private boolean between(BigInteger a, BigInteger b, BigInteger id){
+    private static boolean between(BigInteger a, BigInteger b, BigInteger id){
         if(lessthan(a, b, false)){
             if(greaterthan(id, a, true) && lessthan(id, b, false)){
                 return true;
@@ -91,7 +92,12 @@ public class ChordActor extends AbstractActor {
     }
 
     private Node getNodeById(BigInteger id){
-        return idNodeMap.get(id);
+        if( idNodeMap.get(id) != null){
+            return idNodeMap.get(id);
+        } else {
+            log.info("cannot find Node Object for node id:"+ id.toString());
+            return null;
+        }
     }
 
     private ActorSelection getActorById(BigInteger id){
@@ -102,46 +108,58 @@ public class ChordActor extends AbstractActor {
     }
 
     private void rpcFindSuccessor(ChordMessages.FindSuccessor getsucc){
-        if(between(this.id, this.Sucessor(), getsucc.id)){
+        if(between(this.currentNode.id, this.Sucessor(), getsucc.id)){
             sender().tell(new ChordMessages.SuccessorResp(getsucc.id, getNodeById(this.Sucessor())), self());
             return;
         }
         for (int i =0; i < this.fingerTable.length; i++){
-            if(between(fingerTable[i].start, fingerTable[i].end, getsucc.id)){
-                getActorById(getsucc.id).tell(getsucc, sender());
-                return;
+            if(fingerTable[i] != null){
+                if(between(fingerTable[i].start, fingerTable[i].end, getsucc.id)){
+                    getActorById(getsucc.id).tell(getsucc, sender());
+                    return;
+                }
             }
+
         }
         getActorById(this.Sucessor()).tell(getsucc, sender());
     }
 
     private void rpcNotify(ChordMessages.Notify noti){
-        if(this.Predecessor == null || between(this.Predecessor, this.id, noti.Nodeid.id)){
-            this.Predecessor = noti.Nodeid.id;
+        log.info("Notify from:"+ noti.Nodeid.toJson());
+        if(this.Predecessor == null || ( this.currentNode.id != noti.Nodeid.id && between(this.Predecessor, this.currentNode.id, noti.Nodeid.id))  ){ //A hack need to look at it
+            this.Predecessor = new BigInteger(noti.Nodeid.id.toString());
+            updateNodeCache(noti.Nodeid);
         }
     }
 
     private void rpcStabilize(ChordMessages.Stabilize msg){
-        sender().tell(new ChordMessages.StabilizeResp(getNodeById(this.Predecessor), this.id), self());
+        sender().tell(new ChordMessages.StabilizeResp(getNodeById(this.Predecessor), this.currentNode.id), self());
     }
 
     private void rpcStabilizeResp(ChordMessages.StabilizeResp msg){
-        if(this.id.equals(msg.id)){
+        log.info("new stabilize between: " + msg.Predecessor.id.toString());
+        if(this.currentNode.id.equals(msg.Predecessor.id)){
             return;
         }else {
-            if(between(this.id, this.Sucessor(), msg.id)){
-                this.fingerTable[0].id = msg.id;
+            log.info("new Node: "+ msg.Predecessor.id.toString()+" between: this: "+ this.currentNode.id.toString()+"  Successor: "+this.Sucessor().toString());
+            if(between(this.currentNode.id, this.Sucessor(), msg.Predecessor.id)){
+                this.fingerTable[0].id = msg.Predecessor.id;
+                updateNodeCache(msg.Predecessor);
             }
         }
     }
 
     private void sync(ChordMessages.Remainder rm){
         //Notify
-        getActorById(this.Sucessor()).tell(new ChordMessages.Notify(getNodeById(this.id)), self());
+        getActorById(this.Sucessor()).tell(new ChordMessages.Notify(getNodeById(this.currentNode.id)), self());
 
         //Stabilize
         getActorById(this.Sucessor()).tell(new ChordMessages.Stabilize(), self());
 
+    }
+
+    private void sendNodeInfo(ChordMessages.NodeInfo req){
+        sender().tell(new ChordMessages.NodeInfoResp(currentNode, getNodeById(this.Sucessor()), getNodeById(this.Predecessor)), self());
     }
 
     @Override
@@ -159,7 +177,7 @@ public class ChordActor extends AbstractActor {
                         this::rpcStabilize
                 )
 
-                .match(ChordNodeMessages.NotifyAck.class, notifyAck -> {
+                .match(ChordMessages.NotifyAck.class, notifyAck -> {
                     log.info("Notify Acked");
                 })
 
@@ -170,6 +188,10 @@ public class ChordActor extends AbstractActor {
                 .match(ChordMessages.Remainder.class,
                         this::sync
 
+                )
+
+                .match(ChordMessages.NodeInfo.class,
+                        this::sendNodeInfo
                 )
 
 
