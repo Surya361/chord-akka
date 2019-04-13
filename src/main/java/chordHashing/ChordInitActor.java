@@ -7,6 +7,10 @@ import akka.actor.Props;
 import akka.event.Logging;
 import akka.event.LoggingAdapter;
 
+/**
+ * gets necessary info to initialize the node and creates the ChordActor,
+ * creates the http-server and exposes the endpoint for clients to query
+ */
 public class ChordInitActor extends AbstractActor {
     final Node seedNode;
     final Node currentNode;

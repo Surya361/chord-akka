@@ -61,7 +61,7 @@ public class ChordMain extends AllDirectives {
         }
         system.scheduler()
                 .schedule(
-                        Duration.ZERO, Duration.ofMillis(10000), nodeActorref, new ChordMessages.Remainder(), system.dispatcher(), null);
+                        Duration.ZERO, Duration.ofMillis(5000), nodeActorref, new ChordMessages.Remainder(), system.dispatcher(), null);
 
 
     }

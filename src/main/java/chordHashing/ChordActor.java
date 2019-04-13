@@ -1,7 +1,6 @@
 package chordHashing;
 
 import akka.actor.AbstractActor;
-import akka.actor.ActorRef;
 import akka.actor.ActorSelection;
 import akka.actor.Props;
 import akka.event.Logging;
@@ -64,33 +63,6 @@ public class ChordActor extends AbstractActor {
     }
 
 
-    private static boolean greaterthan(BigInteger a, BigInteger b, boolean equal){
-        if (a.compareTo(b) == 1 || (equal && a.compareTo(b) == 0)) {
-            return true;
-        }
-        return false;
-    }
-
-    private static boolean lessthan(BigInteger a, BigInteger b, boolean equal){
-        if (a.compareTo(b) == -1 || (equal && a.compareTo(b) == 0)) {
-            return true;
-        }
-        return false;
-    }
-
-    private static boolean between(BigInteger a, BigInteger b, BigInteger id){
-        if(lessthan(a, b, false)){
-            if(greaterthan(id, a, true) && lessthan(id, b, false)){
-                return true;
-            }
-        } else{
-            if(greaterthan(id, a, true) || lessthan(id, b, false)){
-                return true;
-            }
-        }
-        return false;
-    }
-
     private Node getNodeById(BigInteger id){
         if( idNodeMap.get(id) != null){
             return idNodeMap.get(id);
@@ -108,13 +80,13 @@ public class ChordActor extends AbstractActor {
     }
 
     private void rpcFindSuccessor(ChordMessages.FindSuccessor getsucc){
-        if(between(this.currentNode.id, this.Sucessor(), getsucc.id)){
+        if(BigIntUtils.between(this.currentNode.id, this.Sucessor(), getsucc.id)){
             sender().tell(new ChordMessages.SuccessorResp(getsucc.id, getNodeById(this.Sucessor())), self());
             return;
         }
         for (int i =0; i < this.fingerTable.length; i++){
             if(fingerTable[i] != null){
-                if(between(fingerTable[i].start, fingerTable[i].end, getsucc.id)){
+                if(BigIntUtils.between(fingerTable[i].start, fingerTable[i].end, getsucc.id)){
                     getActorById(getsucc.id).tell(getsucc, sender());
                     return;
                 }
@@ -126,7 +98,7 @@ public class ChordActor extends AbstractActor {
 
     private void rpcNotify(ChordMessages.Notify noti){
         log.info("Notify from:"+ noti.Nodeid.toJson());
-        if(this.Predecessor == null || ( this.currentNode.id != noti.Nodeid.id && between(this.Predecessor, this.currentNode.id, noti.Nodeid.id))  ){ //A hack need to look at it
+        if(this.Predecessor == null || ( this.currentNode.id != noti.Nodeid.id && BigIntUtils.between(this.Predecessor, this.currentNode.id, noti.Nodeid.id))  ){ //A hack need to look at it
             this.Predecessor = new BigInteger(noti.Nodeid.id.toString());
             updateNodeCache(noti.Nodeid);
         }
@@ -142,7 +114,7 @@ public class ChordActor extends AbstractActor {
             return;
         }else {
             log.info("new Node: "+ msg.Predecessor.id.toString()+" between: this: "+ this.currentNode.id.toString()+"  Successor: "+this.Sucessor().toString());
-            if(between(this.currentNode.id, this.Sucessor(), msg.Predecessor.id)){
+            if(BigIntUtils.between(this.currentNode.id, this.Sucessor(), msg.Predecessor.id)){
                 this.fingerTable[0].id = msg.Predecessor.id;
                 updateNodeCache(msg.Predecessor);
             }
@@ -187,7 +159,6 @@ public class ChordActor extends AbstractActor {
 
                 .match(ChordMessages.Remainder.class,
                         this::sync
-
                 )
 
                 .match(ChordMessages.NodeInfo.class,

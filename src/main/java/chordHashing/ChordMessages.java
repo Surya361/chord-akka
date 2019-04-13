@@ -31,6 +31,7 @@ public interface ChordMessages {
         public String toJson(){
             return "{" +
                     "Requestid: " + this.Keyid.toString()  +
+                    "Node: " + this.Nodeid.toJson() +
                     "}";
         }
     }
@@ -81,6 +82,10 @@ public interface ChordMessages {
     final class NodeInfo implements Serializable{}
 
 
+    /**
+     * NodeInfoResponse Object that contains
+     * information about the current node, its predecessor and successor
+     */
     final class NodeInfoResp implements Serializable{
         final Node current;
         final Node successor;
@@ -95,7 +100,7 @@ public interface ChordMessages {
             return "{" +
                     "current: " + current.toJson()+ ", "+
                     "successor: " + successor.toJson()+", "+
-                    "predecessor: " + predecessor.toJson() +", "+
+                    "predecessor: " + predecessor.toJson() +
                     "}";
         }
     }
