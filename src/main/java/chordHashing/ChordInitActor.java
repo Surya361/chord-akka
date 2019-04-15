@@ -7,6 +7,9 @@ import akka.actor.Props;
 import akka.event.Logging;
 import akka.event.LoggingAdapter;
 
+import java.math.BigInteger;
+import java.util.HashMap;
+
 /**
  * gets necessary info to initialize the node and creates the ChordActor,
  * creates the http-server and exposes the endpoint for clients to query
@@ -15,7 +18,9 @@ public class ChordInitActor extends AbstractActor {
     final Node seedNode;
     final Node currentNode;
     final int bitlen;
+    Node successor;
     ActorRef nodeActor;
+    private HashMap<BigInteger, Integer> indexNodeIdMap = new HashMap<>();
 
     private final LoggingAdapter log = Logging.getLogger(getContext().system(), this);
 
@@ -30,6 +35,8 @@ public class ChordInitActor extends AbstractActor {
             //if clusterInit the currentNode is its successor
            this.nodeActor = context().actorOf(ChordActor.props(this.currentNode, bitlen, currentNode),"node");
            RestApiServer.startServer(context().system(), this.nodeActor, currentNode.ip, Integer.parseInt(currentNode.port)+10000);
+           this.successor = currentNode;
+           updateFingerTable();
         } else{
             this.seedNode = new Node(seedIp, seedPort);
             init();
@@ -49,7 +56,27 @@ public class ChordInitActor extends AbstractActor {
         if (this.nodeActor == null) {
             log.info("Successor: "+ successorResp.Nodeid.toJson());
             this.nodeActor = context().actorOf(ChordActor.props(successorResp.Nodeid, bitlen, currentNode),"node");
+            this.successor = successorResp.Nodeid;
             RestApiServer.startServer(context().system(), this.nodeActor, currentNode.ip, Integer.parseInt(currentNode.port)+10000);
+            updateFingerTable();
+        }
+
+    }
+
+    private void updateFingerTable(){
+        ActorSelection selection = getContext().actorSelection(this.successor.ActorPath());
+        selection.tell(new ChordMessages.AskFingerTable(), this.nodeActor);
+        for(int i =0 ;i < this.bitlen; i++){
+            BigInteger id = BigIntUtils.gobackpred(this.currentNode.id,i,this.bitlen);
+            indexNodeIdMap.put(id, i);
+            selection.tell(new ChordMessages.FindPredecessor(id), self());
+        }
+    }
+
+    private void rpcPredResp(ChordMessages.PredecessorResp predRsp){
+        if(this.indexNodeIdMap.get(predRsp.Keyid) != null){
+            ActorSelection selection = getContext().actorSelection(predRsp.Nodeid.ActorPath());
+            selection.tell(new ChordMessages.UpdateFingerEntry(this.currentNode, this.indexNodeIdMap.get(predRsp.Keyid)), self());
         }
     }
 
@@ -69,6 +96,9 @@ public class ChordInitActor extends AbstractActor {
                     }
                 })
 
+                .match(ChordMessages.PredecessorResp.class,
+                        this::rpcPredResp
+                )
                 .build();
     }
 }

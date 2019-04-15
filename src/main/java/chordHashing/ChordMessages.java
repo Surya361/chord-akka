@@ -1,7 +1,9 @@
 package chordHashing;
 
+
 import java.io.Serializable;
 import java.math.BigInteger;
+import com.google.common.collect.ImmutableList;
 
 public interface ChordMessages {
 
@@ -11,8 +13,17 @@ public interface ChordMessages {
      */
     final class FindSuccessor implements Serializable {
         final BigInteger id;
+        final String trace;
+        final int tty;
         public FindSuccessor(BigInteger id){
             this.id = id;
+            this.trace = "";
+            this.tty=10;
+        }
+        public FindSuccessor(BigInteger id, String trace, int tty){
+            this.id = id;
+            this.trace = trace;
+            this.tty=tty;
         }
     }
 
@@ -24,14 +35,22 @@ public interface ChordMessages {
     final class SuccessorResp implements Serializable{
         final BigInteger Keyid;
         final Node Nodeid;
+        final String trace;
         public SuccessorResp(BigInteger keyid, Node Nodeid){
             this.Keyid = keyid;
             this.Nodeid = Nodeid;
+            this.trace = "";
+        }
+        public SuccessorResp(BigInteger keyid, Node Nodeid, String trace){
+            this.Keyid = keyid;
+            this.Nodeid = Nodeid;
+            this.trace = trace;
         }
         public String toJson(){
             return "{" +
                     "Requestid: " + this.Keyid.toString()  +
                     "Node: " + this.Nodeid.toJson() +
+                    "trace: " + this.trace +
                     "}";
         }
     }
@@ -104,5 +123,67 @@ public interface ChordMessages {
                     "}";
         }
     }
+
+    /**
+     * Request to FindPredecessor Object
+     */
+    final class FindPredecessor implements Serializable{
+        final BigInteger id;
+        public FindPredecessor(BigInteger id){
+            this. id = id;
+        }
+    }
+
+
+    /** Message Object class for successor Response
+     *  Keyid --> the key id queried for (Request is async)
+     *  Nodeid --> Node object of the predecessor actor
+     */
+    final class PredecessorResp implements Serializable{
+        final BigInteger Keyid;
+        final Node Nodeid;
+        public PredecessorResp(BigInteger keyid, Node Nodeid){
+            this.Keyid = keyid;
+            this.Nodeid = Nodeid;
+        }
+        public String toJson(){
+            return "{" +
+                    "Requestid: " + this.Keyid.toString()  +
+                    "Node: " + this.Nodeid.toJson() +
+                    "}";
+        }
+    }
+
+    final class AskFingerTable implements Serializable{}
+
+    final class RespondFingerTable implements Serializable {
+        final ImmutableList<FingerEntry> FingerTable;
+
+        public RespondFingerTable(FingerEntry[] fingerTable) {
+            FingerTable = ImmutableList.copyOf(fingerTable);
+        }
+
+        public String toJson() {
+            String Json = "{";
+            for (int i = 0; i < this.FingerTable.size(); i++) {
+                Json = Json + "\n" + FingerTable.get(i).toJson();
+            }
+            return Json + "}";
+
+        }
+    }
+
+    final class UpdateFingerEntry implements Serializable{
+        final Node node;
+        final int i;
+        public UpdateFingerEntry(Node node, int i){
+            this.i = i;
+            this.node = node;
+        }
+    }
+
+    final class DebugInfo implements Serializable{ }
+
+
 
 }

@@ -47,7 +47,12 @@ public class ApiRoutes extends AllDirectives {
                         route(
                                 getNodeinfo()
                         )
+                ),
+                pathPrefix("debug", () ->
+                        route(
+                                getDebuginfo()
                         )
+                )
         );
     }
 
@@ -69,6 +74,17 @@ public class ApiRoutes extends AllDirectives {
                     timeout);
             CompletionStage<ChordMessages.NodeInfoResp> node = FutureConverters.toJava(getNodeInfo)
                     .thenApply(ChordMessages.NodeInfoResp.class::cast);
+            return onSuccess(() -> node,
+                    nodeInfo -> complete(StatusCodes.OK, nodeInfo.toJson()));
+        });
+
+    }
+    private Route getDebuginfo() {
+        return get(() -> {
+            Future<Object> getNodeInfo = Patterns.ask(chordActor, new ChordMessages.DebugInfo(),
+                    timeout);
+            CompletionStage<ChordMessages.RespondFingerTable> node = FutureConverters.toJava(getNodeInfo)
+                    .thenApply(ChordMessages.RespondFingerTable.class::cast);
             return onSuccess(() -> node,
                     nodeInfo -> complete(StatusCodes.OK, nodeInfo.toJson()));
         });
