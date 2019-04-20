@@ -52,6 +52,11 @@ public class ApiRoutes extends AllDirectives {
                         route(
                                 getDebuginfo()
                         )
+                ),
+                pathPrefix("redundancyinfo", () ->
+                        route(
+                                getRedundancyInfo()
+                        )
                 )
         );
     }
@@ -85,6 +90,17 @@ public class ApiRoutes extends AllDirectives {
                     timeout);
             CompletionStage<ChordMessages.RespondFingerTable> node = FutureConverters.toJava(getNodeInfo)
                     .thenApply(ChordMessages.RespondFingerTable.class::cast);
+            return onSuccess(() -> node,
+                    nodeInfo -> complete(StatusCodes.OK, nodeInfo.toJson()));
+        });
+
+    }
+    private Route getRedundancyInfo() {
+        return get(() -> {
+            Future<Object> getNodeInfo = Patterns.ask(chordActor, new ChordMessages.RedundancyInfo(),
+                    timeout);
+            CompletionStage<ChordMessages.RespRedundancyInfo> node = FutureConverters.toJava(getNodeInfo)
+                    .thenApply(ChordMessages.RespRedundancyInfo.class::cast);
             return onSuccess(() -> node,
                     nodeInfo -> complete(StatusCodes.OK, nodeInfo.toJson()));
         });

@@ -78,9 +78,23 @@ public interface ChordMessages {
     final class StabilizeResp implements Serializable{
         final Node Predecessor;
         final BigInteger id;
+        final ImmutableList<Node> nextSucessors;
         public StabilizeResp(Node Predecessor, BigInteger id){
             this.Predecessor = Predecessor;
             this.id = id;
+            this.nextSucessors = null;
+        }
+
+        public StabilizeResp(Node Predecessor, BigInteger id, Node[] successorList){
+            this.Predecessor = Predecessor;
+            this.id = id;
+
+            for(int i=0; i< successorList.length; i++){
+                if (successorList[i] ==  null){
+                    successorList[i] = new Node("0.0.0.0","0");
+                }
+            }
+            this.nextSucessors = ImmutableList.copyOf(successorList);
         }
     }
 
@@ -185,5 +199,52 @@ public interface ChordMessages {
     final class DebugInfo implements Serializable{ }
 
 
+    final class RedundancyInfo implements Serializable{}
+
+    final class RespRedundancyInfo implements Serializable{
+        final ImmutableList<Node> nextSucessors;
+        public RespRedundancyInfo(Node[] nextsucessor) {
+            for(int i=0; i< nextsucessor.length; i++){
+                if (nextsucessor[i] ==  null){
+                    nextsucessor[i] = new Node("0.0.0.0","0");
+                }
+            }
+            this.nextSucessors = ImmutableList.copyOf(nextsucessor);
+        }
+        public String toJson() {
+            String Json = "{";
+            for (int i = 0; i < this.nextSucessors.size(); i++) {
+                Json = Json + "\n" + nextSucessors.get(i).toJson();
+            }
+            return Json + "}";
+
+        }
+    }
+
+    final class Ping implements Serializable{}
+    final class Pong implements Serializable{}
+
+    final class SuccessorChange implements Serializable{
+        final Node newNode;
+        public SuccessorChange(Node newNode){
+            this.newNode = newNode;
+        }
+    }
+
+    final class SuccessorFailure implements Serializable{
+        final Node failedNode;
+        public SuccessorFailure(Node failedNode){
+            this.failedNode = failedNode;
+        }
+    }
+
+    final class PredecessorFailedNotify implements Serializable{
+        final Node newPred;
+        final Node pred;
+        public PredecessorFailedNotify(Node newPred, Node pred){
+            this.newPred = newPred;
+            this.pred = pred;
+        }
+    }
 
 }

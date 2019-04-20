@@ -63,10 +63,11 @@ public class ChordInitActor extends AbstractActor {
 
     }
 
+
     private void updateFingerTable(){
         ActorSelection selection = getContext().actorSelection(this.successor.ActorPath());
         selection.tell(new ChordMessages.AskFingerTable(), this.nodeActor);
-        for(int i =0 ;i < this.bitlen; i++){
+        for(int i =1 ;i < this.bitlen; i++){
             BigInteger id = BigIntUtils.gobackpred(this.currentNode.id,i,this.bitlen);
             indexNodeIdMap.put(id, i);
             selection.tell(new ChordMessages.FindPredecessor(id), self());
@@ -79,6 +80,7 @@ public class ChordInitActor extends AbstractActor {
             selection.tell(new ChordMessages.UpdateFingerEntry(this.currentNode, this.indexNodeIdMap.get(predRsp.Keyid)), self());
         }
     }
+
 
     @Override
     public Receive createReceive(){

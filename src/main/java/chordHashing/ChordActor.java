@@ -1,13 +1,14 @@
 package chordHashing;
 
 import akka.actor.AbstractActor;
+import akka.actor.ActorRef;
 import akka.actor.ActorSelection;
 import akka.actor.Props;
 import akka.event.Logging;
 import akka.event.LoggingAdapter;
+import com.google.common.collect.ImmutableList;
 
 import java.math.BigInteger;
-import java.util.Arrays;
 import java.util.HashMap;
 
 /** Chord Actor class extends
@@ -22,6 +23,8 @@ public class ChordActor extends AbstractActor {
     private final Node currentNode;
     private final int bitlen;
     private static int fix_fingers = 0;
+    private Node[] nextSucessors;
+    private ActorRef liveActor;
 
 
     private final LoggingAdapter log = Logging.getLogger(getContext().system(), this);
@@ -53,6 +56,46 @@ public class ChordActor extends AbstractActor {
         idNodeMap.put(node.id, node);
     }
 
+    private void addSucessorNode(Node addNode){
+        log.info("Adding Node: "+ addNode.toJson());
+        if(nextSucessors == null){
+            nextSucessors = new Node[5];
+            nextSucessors[0] = addNode;
+            return;
+        } else {
+            if(addNode.id.equals(this.nextSucessors[0].id)){
+                return;
+            }
+            if(this.nextSucessors[1] == null ){
+
+                this.nextSucessors[1] = addNode;
+            } else {
+                Node temp = this.nextSucessors[1];
+                this.nextSucessors[1] = addNode;
+                for(int i=2; i < this.nextSucessors.length; i++){
+                    Node add = temp;
+                    temp = this.nextSucessors[i];
+                    this.nextSucessors[i] = add;
+
+                }
+            }
+        }
+    }
+
+    private void removeFromSucessorList(Node rmNode){
+        Node[] newSuccessorList = new Node[5];
+        int fill = 0;
+        for(int i=0 ; i< this.nextSucessors.length; i++){
+            if(this.nextSucessors[i] != null && this.nextSucessors[i].id.equals(rmNode.id)){
+                continue;
+            } else {
+                newSuccessorList[fill] = this.nextSucessors[i];
+                fill++;
+            }
+        }
+        this.nextSucessors = newSuccessorList;
+    }
+
     private ChordActor(Node successor, int bitlen, Node currentNode){
         this.currentNode = currentNode;
         this.bitlen = bitlen;
@@ -61,6 +104,10 @@ public class ChordActor extends AbstractActor {
         updateNodeCache(successor);
         updateNodeCache(currentNode);
         initBareFingerTable();
+        addSucessorNode(currentNode);
+        addSucessorNode(successor);
+        this.liveActor = context().actorOf(Props.create(LiveActor.class),"live");
+
     }
 
     public void initBareFingerTable(){
@@ -120,7 +167,7 @@ public class ChordActor extends AbstractActor {
     }
 
     private void rpcNotify(ChordMessages.Notify noti){
-        log.info("Notify from:"+ noti.Nodeid.toJson());
+        log.debug("Notify from:"+ noti.Nodeid.toJson());
         if(this.Predecessor == null || ( this.currentNode.id != noti.Nodeid.id && BigIntUtils.between(this.Predecessor, this.currentNode.id, noti.Nodeid.id))  ){ //A hack need to look at it
             this.Predecessor = new BigInteger(noti.Nodeid.id.toString());
             updateNodeCache(noti.Nodeid);
@@ -130,20 +177,43 @@ public class ChordActor extends AbstractActor {
 
 
     private void rpcStabilize(ChordMessages.Stabilize msg){
-        sender().tell(new ChordMessages.StabilizeResp(getNodeById(this.Predecessor), this.currentNode.id), self());
+        sender().tell(new ChordMessages.StabilizeResp(getNodeById(this.Predecessor), this.currentNode.id, this.nextSucessors), self());
     }
 
 
 
+    private void merge(ImmutableList<Node> successorList){
+        Node[] newSucessorList = new Node[5];
+        newSucessorList[0] = this.nextSucessors[0];
+        newSucessorList[1] = successorList.get(0);
+        if(this.nextSucessors[1] == null){
+            return;
+        }
+        for(int i=0;i < successorList.size()-1; i++){
+            if(!successorList.get(i).port.equals("0")){
+                newSucessorList[i+1] = successorList.get(i);
+                updateNodeCache(successorList.get(i));
+            }else {
+                break;
+            }
+
+        }
+        this.nextSucessors = newSucessorList;
+    }
+
 
     private void rpcStabilizeResp(ChordMessages.StabilizeResp msg){
-        log.info("new stabilize between: " + msg.Predecessor.id.toString());
+        log.debug("new stabilize between: " + msg.Predecessor.id.toString());
         if(this.currentNode.id.equals(msg.Predecessor.id)){
+            if(!this.currentNode.id.equals(this.Sucessor())){
+                merge(msg.nextSucessors);
+            }
             return;
         }else {
             log.info("new Node: "+ msg.Predecessor.id.toString()+" between: this: "+ this.currentNode.id.toString()+"  Successor: "+this.Sucessor().toString());
             if(BigIntUtils.between(this.currentNode.id, this.Sucessor(), msg.Predecessor.id)){
                 this.fingerTable[0] = getFingertableEntry(this.currentNode.id,0, msg.Predecessor, this.bitlen);
+                addSucessorNode(msg.Predecessor);
                 updateNodeCache(msg.Predecessor);
             }
         }
@@ -164,6 +234,8 @@ public class ChordActor extends AbstractActor {
                 this.fix_fingers = 1;
             }
         }
+        //SendRemainder to liveliness checking actor
+        this.liveActor.tell(new ChordMessages.SuccessorChange(getNodeById(this.Sucessor())), self());
 
 
     }
@@ -201,47 +273,23 @@ public class ChordActor extends AbstractActor {
     }
 
     private void rpcRespondFingerTable(ChordMessages.RespondFingerTable fingerTable){
-       // int fill =1;
         int totalUpdated = 0;
-        //FingerEntry cmpRow = this.fingerTable[0];
 
         for (int i =0; i < fingerTable.FingerTable.size() && totalUpdated < this.fingerTable.length; i++){
             FingerEntry cmpRow = i == 0? this.fingerTable[0]  : fingerTable.FingerTable.get(i);
-          //  log.info("first for");
             for (int j = 1; j< this.fingerTable.length; j++){
                 FingerEntry newFinger = updateFingerTablebyRow(cmpRow, j);
-                //log.info("second for");
                 if (newFinger.succ != null && this.fingerTable[j].succ == null) {
                     updateNodeCache(fingerTable.FingerTable.get(i).succ);
                     totalUpdated++;
-                //    log.info("updating");
                     this.fingerTable[j] = newFinger;
                 }
             }
         }
-        /*for (; fill < this.fingerTable.length; fill++){
-            FingerEntry newFinger = updateFingerTablebyRow(cmpRow, fill);
-            if (newFinger.succ != null ){
-                updateNodeCache(cmpRow.succ);
-                this.fingerTable[fill] = newFinger;
-            } else {
-                if (fingercmp < fingerTable.FingerTable.size()){
-                    cmpRow = fingerTable.FingerTable.get(fingercmp++);
-                    fill--;
-                } else {
-                    break;
-                }
-            }
-        }
-        while(fill < this.fingerTable.length){
-            log.info("asking sucessor to help with fingertable id:"+ fill + "  lenght: "+ this.fingerTable.length +" for id:"+this.fingerTable[fill]);
-            getActorById(this.Sucessor()).tell(new ChordMessages.FindSuccessor(this.fingerTable[fill].start), self());
-            fill++;
-        }*/
 
         for(int i =0; i< this.fingerTable.length; i++){
             if(this.fingerTable[i].succ == null){
-                log.info("asking sucessor to help with fingertable id:"+ i + "  lenght: "+ this.fingerTable.length +" for id:"+this.fingerTable[i]);
+                log.debug("asking sucessor to help with fingertable id:"+ i + "  lenght: "+ this.fingerTable.length +" for id:"+this.fingerTable[i]);
                 getActorById(this.Sucessor()).tell(new ChordMessages.FindSuccessor(this.fingerTable[i].start), self());
             }
         }
@@ -257,7 +305,7 @@ public class ChordActor extends AbstractActor {
     }
 
     private void rpcUpdateFingerEntry(ChordMessages.UpdateFingerEntry updatemsg){
-        log.info("Received a updated for finger table entry\n Updated: "+ updatemsg.node.toJson() +"\n" +"Previous: " + this.fingerTable[updatemsg.i].toJson() );
+        log.debug("Received a updated for finger table entry\n Updated: "+ updatemsg.node.toJson() +"\n" +"Previous: " + this.fingerTable[updatemsg.i].toJson() );
         if(this.fingerTable[updatemsg.i].succ != null && BigIntUtils.between(this.Sucessor(), this.fingerTable[updatemsg.i].succ.id, updatemsg.node.id) && !updatemsg.node.id.equals(this.fingerTable[updatemsg.i].succ)){
                 this.fingerTable[updatemsg.i] = new FingerEntry(fingerTable[updatemsg.i].start, fingerTable[updatemsg.i].end, updatemsg.node);
                 if(this.Predecessor != null){
@@ -270,7 +318,22 @@ public class ChordActor extends AbstractActor {
 
     }
 
+    private void rpcNodeFailure(ChordMessages.SuccessorFailure sf){
+        if(this.nextSucessors[2] != null && sf.failedNode.id.equals(this.Sucessor())){
+            fingerTable[0] = getFingertableEntry(this.currentNode.id, 0, this.nextSucessors[2], this.bitlen);
+            removeFromSucessorList(sf.failedNode);
+            getActorById(this.Sucessor()).tell(new ChordMessages.PredecessorFailedNotify(this.currentNode, sf.failedNode), self());
+        } else{
+            log.info("successor failed cannot determine the next sucessor Node");
+        }
 
+
+    }
+
+    private void rpcFailedPred(ChordMessages.PredecessorFailedNotify predecessorFailedNotify){
+       this.Predecessor = predecessorFailedNotify.newPred.id;
+       updateNodeCache(predecessorFailedNotify.newPred);
+    }
 
 
 
@@ -325,6 +388,17 @@ public class ChordActor extends AbstractActor {
                 .match(ChordMessages.DebugInfo.class, debugInfo -> {
                     sender().tell(new ChordMessages.RespondFingerTable(this.fingerTable), self());
                 })
+
+                .match(ChordMessages.RedundancyInfo.class, redundancyInfo -> {
+                    sender().tell(new ChordMessages.RespRedundancyInfo(this.nextSucessors), self());
+                })
+
+                .match(ChordMessages.SuccessorFailure.class,
+                        this::rpcNodeFailure
+                )
+                .match(ChordMessages.PredecessorFailedNotify.class,
+                        this::rpcFailedPred
+                )
 
                 .build();
     }
